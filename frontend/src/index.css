@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid theme('colors.gold.500');
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-pine-900 text-sage-50 font-semibold px-5 py-2.5 rounded-lg
+      hover:bg-pine-800 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-transparent border border-pine-900/20 text-pine-900 font-semibold px-5 py-2.5 rounded-lg
+      hover:bg-pine-900/5 transition-colors duration-150;
+  }
+  .btn-danger {
+    @apply bg-transparent border border-red-300 text-red-600 font-semibold px-4 py-2 rounded-lg
+      hover:bg-red-50 transition-colors duration-150 text-sm;
+  }
+  .card {
+    @apply bg-white rounded-2xl border border-pine-900/10 shadow-sm p-6;
+  }
+  .input-field {
+    @apply w-full rounded-lg border border-pine-900/15 bg-white px-4 py-2.5 text-sm
+      focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition;
+  }
+  .label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-pine-700 mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+}
+
+/* Signature element: an animated EKG / pulse line used sparingly on the
+   landing hero and loading states - ties the visual identity directly to
+   "healthcare" rather than a generic dashboard look. */
+.pulse-line {
+  stroke-dasharray: 300;
+  stroke-dashoffset: 300;
+  animation: draw-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes draw-pulse {
+  0% {
+    stroke-dashoffset: 300;
+  }
+  60% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -300;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

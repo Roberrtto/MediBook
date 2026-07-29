@@ -1,0 +1,94 @@
+name: MediBook CI
+
+# CI (Continuous Integration): runs on every push and every pull request
+# targeting main/develop, so a broken build or failing test can never be
+# merged silently.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-test:
+    name: Backend - Lint & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: medibook
+          POSTGRES_PASSWORD: medibook
+          POSTGRES_DB: medibook_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medibook"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ESLint
+        run: npm run lint || true # non-blocking until the team finishes style pass
+
+      - name: Run unit tests with coverage
+        run: npm test
+        env:
+          JWT_SECRET: ci-test-secret
+          DATABASE_URL: postgresql://medibook:medibook@localhost:5432/medibook_test
+          NODE_ENV: test
+
+  frontend-build:
+    name: Frontend - Install & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build production bundle
+        run: npm run build
+
+  # CD (Continuous Delivery): only runs after both jobs above succeed, and
+  # only on main - this is where a real deploy step (e.g. Render/Vercel
+  # deploy hook) would go.
+  deploy:
+    name: Deploy (placeholder)
+    needs: [backend-test, frontend-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy notice
+        run: echo "All checks passed on main. Hook up a real deploy step (Render/Vercel) here."
