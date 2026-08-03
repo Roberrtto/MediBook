@@ -1,4 +1,9 @@
 node_modules
+<<<<<<< HEAD
 dist
 .env
-.DS_Store
+=======
+.env
+dist
+>>>>>>> 67bd4182d3b5ce32ca466401610b66edeb911108
+*.log

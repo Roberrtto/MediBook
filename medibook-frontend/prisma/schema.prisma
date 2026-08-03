@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  PATIENT
+  DOCTOR
+  RECEPTIONIST
+  IT_ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         Role     @default(PATIENT)
+  isActive     Boolean  @default(true)
+  // FR-10: per-user notification preferences used by the Twilio/SendGrid cron job
+  notifications Json    @default("{\"smsReminder\":true,\"smsConfirmation\":true,\"emailSummary\":true}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  doctorProfile       Doctor?
+  patientAppointments Appointment[] @relation("PatientAppointments")
+  auditLogs           AuditLog[]
+
+  @@index([email])
+}
+
+// ─── Doctor profile (extends User) ────────────────────────────────────────────
+
+model Doctor {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  specialty String
+  bio       String?
+  createdAt DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id])
+  slots        Slot[]
+  appointments Appointment[] @relation("DoctorAppointments")
+
+  @@index([specialty])
+}
+
+// ─── Slots ────────────────────────────────────────────────────────────────────
+
+model Slot {
+  id        String   @id @default(cuid())
+  doctorId  String
+  startTime DateTime
+  endTime   DateTime
+  isBooked  Boolean  @default(false)
+
+  doctor      Doctor       @relation(fields: [doctorId], references: [id])
+  appointment Appointment?
+
+  @@index([doctorId, startTime])
+}
+
+// ─── Appointments ─────────────────────────────────────────────────────────────
+
+model Appointment {
+  id     String            @id @default(cuid())
+  // For walk-ins, patientId points to a placeholder/guest user
+  patientId          String
+  doctorId           String
+  slotId             String            @unique // DB-level double-booking lock (FR-12)
+  status             AppointmentStatus @default(CONFIRMED)
+  reason             String?
+  emergencyReason    String?
+  isWalkIn           Boolean           @default(false)
+  walkInName         String?           // used when patient has no account
+  walkInPhone        String?
+  reminderSent       Boolean           @default(false)
+  // ── Audit trail fields (answers "who did this?") ──
+  createdById        String
+  createdByName      String
+  createdByRole      String
+  lastModifiedById   String?
+  lastModifiedByName String?
+  lastModifiedByRole String?
+  lastModifiedAt     DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  patient       User          @relation("PatientAppointments", fields: [patientId], references: [id])
+  doctor        Doctor        @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  slot          Slot          @relation(fields: [slotId], references: [id])
+  medicalRecord MedicalRecord?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+}
+
+// ─── Medical Records ──────────────────────────────────────────────────────────
+
+model MedicalRecord {
+  id            String   @id @default(cuid())
+  patientId     String
+  appointmentId String   @unique
+  diagnosis     String?
+  prescription  String?
+  labOrders     String?
+  privateNote   String?  // only visible to doctors (NFR-01)
+  // ── Audit trail fields ──
+  createdById        String
+  createdByName      String  // "Dr. Omondi" — shown in the UI so no ghost authorship
+  lastModifiedById   String?
+  lastModifiedByName String?
+  lastModifiedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@index([patientId])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+// Every mutation in the system creates a row here: login, booking, cancel,
+// clinical note, notification pref update — everything is traceable.
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  // Who
+  userId      String
+  userName    String
+  userRole    String
+  // What
+  action      String   // BOOK, CANCEL, RESCHEDULE, ADD_NOTE, LOGIN, LOGOUT,
+                       // REGISTER, UPDATE_PREFS, WALK_IN_BOOK
+  resource    String   // appointments | records | users | auth
+  resourceId  String?
+  description String   // human-readable: "Dr. Omondi cancelled appointment #xyz for patient Jane"
+  metadata    Json?    // { before, after } snapshots for UPDATE actions
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}
